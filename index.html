@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Escala de Intensidad Continua</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 30px;
+      max-width: 700px;
+      margin: auto;
+    }
+
+    h2 {
+      text-align: center;
+    }
+
+    .slider-container {
+      position: relative;
+      margin: 40px 0 20px;
+    }
+
+    .slider {
+      width: 100%;
+    }
+
+    .value-display {
+      font-size: 18px;
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    .labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 15px;
+      font-size: 14px;
+    }
+
+    button {
+      margin: 10px 5px;
+      padding: 10px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+  </style>
+</head>
+<body>
+  <h2>Escala de Intensidad (0.00 a 100.00)</h2>
+
+  <div class="slider-container">
+    <input type="range" id="slider" class="slider" min="0" max="100" step="0.01" value="50.00" oninput="actualizarValor(this.value)">
+    <div class="value-display">Valor seleccionado: <span id="valor">50.00</span></div>
+  </div>
+
+  <div class="labels">
+    <span>Apenas detectable</span>
+    <span>Débil</span>
+    <span>Moderada</span>
+    <span>Fuerte</span>
+    <span>Muy fuerte</span>
+    <span>Lo más fuerte imaginable</span>
+  </div>
+
+  <div style="text-align: center;">
+    <button onclick="guardarRespuesta()">Guardar respuesta</button>
+    <button onclick="exportarCSV()">Exportar respuestas (CSV)</button>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    // ⚠️ Reemplaza con tu configuración de Firebase
+    const firebaseConfig = {
+      apiKey: "TU_API_KEY",
+      authDomain: "TU_DOMINIO.firebaseapp.com",
+      projectId: "TU_PROJECT_ID",
+      storageBucket: "TU_BUCKET.appspot.com",
+      messagingSenderId: "TU_SENDER_ID",
+      appId: "TU_APP_ID"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    function actualizarValor(val) {
+      document.getElementById("valor").textContent = parseFloat(val).toFixed(2);
+    }
+
+    function guardarRespuesta() {
+      const valor = parseFloat(document.getElementById("slider").value).toFixed(2);
+      const respuesta = {
+        valor: parseFloat(valor),
+        timestamp: new Date().toISOString()
+      };
+
+      let almacenadas = JSON.parse(localStorage.getItem('respuestas')) || [];
+      almacenadas.push(respuesta);
+      localStorage.setItem('respuestas', JSON.stringify(almacenadas));
+
+      alert(`Respuesta guardada: ${valor}`);
+      if (navigator.onLine) sincronizarRespuestas();
+    }
+
+    async function sincronizarRespuestas() {
+      let almacenadas = JSON.parse(localStorage.getItem('respuestas')) || [];
+      if (almacenadas.length === 0) return;
+
+      try {
+        for (let r of almacenadas) {
+          await db.collection("respuestas").add(r);
+        }
+        alert("Respuestas sincronizadas con Firebase.");
+        localStorage.removeItem('respuestas');
+      } catch (err) {
+        console.error("Error al sincronizar:", err);
+      }
+    }
+
+    window.addEventListener('online', () => {
+      console.log("Conexión restaurada. Sincronizando...");
+      sincronizarRespuestas();
+    });
+
+    function exportarCSV() {
+      let almacenadas = JSON.parse(localStorage.getItem('respuestas')) || [];
+      if (almacenadas.length === 0) {
+        alert("No hay respuestas guardadas.");
+        return;
+      }
+
+      const encabezado = "Valor,Fecha\n";
+      const filas = almacenadas.map(r => `${r.valor},${r.timestamp}`).join("\n");
+      const csv = encabezado + filas;
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "respuestas.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+</body>
+</html>
